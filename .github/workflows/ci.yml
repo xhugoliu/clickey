@@ -1,0 +1,114 @@
+name: Clickey CI and Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check versions and frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check versions and plan release
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/release.py plan
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm run lint
+      - run: npm test
+      - run: npm run format:rust:check
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: check
+    if: needs.check.outputs.publish == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS Apple Silicon
+            runner: macos-15
+            bundle: dmg
+            bundle_suffix: aarch64.dmg
+            asset_suffix: aarch64.dmg
+          - platform: Windows x64
+            runner: windows-2025
+            bundle: msi
+            bundle_suffix: x64_en-US.msi
+            asset_suffix: x64.msi
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: cargo test --release --locked --manifest-path src-tauri/Cargo.toml
+      - name: Build installer
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          BUNDLE: ${{ matrix.bundle }}
+          BUNDLE_SUFFIX: ${{ matrix.bundle_suffix }}
+          ASSET_SUFFIX: ${{ matrix.asset_suffix }}
+        run: |
+          npm run tauri:build -- --bundles "$BUNDLE" -- --locked
+          mkdir -p release-assets
+          cp "src-tauri/target/release/bundle/$BUNDLE/Clickey_${VERSION}_$BUNDLE_SUFFIX" \
+            "release-assets/Clickey_${VERSION}_$ASSET_SUFFIX"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: clickey-${{ matrix.bundle }}
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: [check, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: clickey-publish-release
+      queue: max
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: clickey-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify installers and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/release.py publish

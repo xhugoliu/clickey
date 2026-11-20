@@ -114,6 +114,7 @@ Clickey 是一个“键盘驱动的分层网格定位”工具：热键激活全
 - Core Engine（TS 纯逻辑）：单测覆盖率目标 **100%**
 - Rust：`cargo fmt`、`cargo clippy`、`cargo test`
 - 前端：Prettier、ESLint
+- GitHub Actions 在推送 `main` 和提交 PR 时校验 npm、Cargo、Tauri 版本及前端。仅当 `main` 上的稳定版本高于已发布版本时，才为触发提交构建并发布 Apple Silicon DMG 和 Windows x64 MSI。手动运行只验证打包，发布失败可重跑原工作流。
 
 ---
 
@@ -506,6 +507,7 @@ Clickey 是一个“键盘驱动的分层网格定位”工具：热键激活全
 
 #### Done
 
+- GitHub Actions 自动检查、双平台打包及版本发布
 - macOS 安全键盘输入期间的激活提示
 - 激活热键二次按下取消 Overlay（含快速连按注册竞态保护）
 - 1.0 发布前文档收口（README 改为对外说明，AGENTS 修正当前态文案并去掉过时描述）

@@ -56,6 +56,14 @@ Mouse 页负责动作顺序与启用状态，以及平滑移动、随机落点�
 - 构建桌面应用：`npm run tauri:build`
 - 仅构建前端：`npm run build`
 
+### GitHub 自动发布
+
+在 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 和 `src-tauri/tauri.conf.json` 中同步提升版本号，例如从 `1.0.4` 升到 `1.0.5`，再推送或合并到 `main`。
+
+版本高于已发布的正式版本时，GitHub Actions 会测试并构建 Apple Silicon macOS DMG 和 Windows x64 MSI。两个安装包上传并通过 SHA-256 校验后，自动从该提交创建版本标签并发布 GitHub Release。
+
+普通提交和 PR 会运行版本一致性与前端检查。可在 Actions 的 **Clickey CI and Release** 页面手动运行双平台打包，或用 **Re-run failed jobs** 重试失败的发布。
+
 ### 常用检查命令
 
 - 单测：`npm test`
