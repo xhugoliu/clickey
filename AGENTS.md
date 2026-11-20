@@ -105,6 +105,7 @@ Clickey 是一个“键盘驱动的分层网格定位”工具：热键激活全
 > 是否最终采用这些 crate 允许调整，但调整必须在本文件相应章节写明原因与替代方案。
 
 - macOS 发布包执行鼠标移动/点击依赖系统“辅助功能”权限；`tauri dev` 与安装后的 `.app` 是不同的 TCC 身份。智能体在排查“开发态正常、安装态无法点击/无法控制鼠标”时，优先检查安装包是否已单独授权；adhoc 本地签名在重打包后可能需要重新授权。
+- macOS 激活时由 Native 检查 `IsSecureEventInputEnabled()`。保护开启时，Overlay 只显示 4 秒的本地化提示，不注册网格热键或开启选择会话。保护解除后可以按热键重新激活，旧提示的计时器不得关闭新会话。
 - macOS 当前全局热键链路（`tauri-plugin-global-shortcut` / `global-hotkey`）对函数键的稳定支持上限为 `F20`；Settings WebView 录制函数键时需兼容 AppKit 私有字符（`NSF*FunctionKey`），但 `F21`~`F24` 不能作为可注册的全局热键。
 - macOS 构建入口默认走 `npm run tauri:build`：脚本会优先探测本机签名证书（`Developer ID Application` -> `Apple Distribution` -> `Apple Development`），找不到时显式回退到 `APPLE_SIGNING_IDENTITY="-"`。需要固定证书时优先通过环境变量覆盖，而不是改业务代码。
 
@@ -505,6 +506,7 @@ Clickey 是一个“键盘驱动的分层网格定位”工具：热键激活全
 
 #### Done
 
+- macOS 安全键盘输入期间的激活提示
 - 激活热键二次按下取消 Overlay（含快速连按注册竞态保护）
 - 1.0 发布前文档收口（README 改为对外说明，AGENTS 修正当前态文案并去掉过时描述）
 - E0.2 产出 Core Engine 规格（从原型抽象成可测试接口与状态机定义）

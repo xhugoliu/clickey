@@ -135,6 +135,9 @@ const en: Record<TranslationKey, string> = {
   "overlay.action.drag": "Drag",
   "overlay.drag.phaseStart": "Drag · Start",
   "overlay.drag.phaseEnd": "Drag · End",
+  "overlay.secureInput.title": "macOS Secure Keyboard Input is active",
+  "overlay.secureInput.retry":
+    "Move focus to a regular text field or the browser address bar, then use the Clickey shortcut again.",
   "errors.layersRequired": "At least one layer is required.",
   "errors.comboAxisConstraintSimple":
     "Layer {index} combo must be stage 1 = 1xN, stage 2 = Nx1.",

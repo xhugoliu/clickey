@@ -46,6 +46,12 @@ extern "C" {
     fn AXIsProcessTrusted() -> u8;
 }
 
+#[cfg(target_os = "macos")]
+#[link(name = "Carbon", kind = "framework")]
+extern "C" {
+    fn IsSecureEventInputEnabled() -> u8;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Region {
@@ -148,6 +154,8 @@ struct AppState {
     overlay_key_map: Mutex<HashMap<u32, String>>,
     overlay_active: Mutex<bool>,
     overlay_generation: AtomicU64,
+    #[cfg(target_os = "macos")]
+    secure_input_hint_id: AtomicU64,
     overlay_lifecycle: Mutex<()>,
     overlay_click_action: Mutex<Option<ClickAction>>,
     drag_session: Mutex<Option<DragSession>>,
@@ -193,6 +201,8 @@ const NUDGE_REPEAT_DELAY_MS: u64 = 250;
 const NUDGE_REPEAT_INTERVAL_MS: u64 = 40;
 #[cfg(target_os = "macos")]
 const ACCESSIBILITY_HINT_THROTTLE_SECS: u64 = 2;
+#[cfg(target_os = "macos")]
+const SECURE_INPUT_HINT_DURATION: Duration = Duration::from_secs(4);
 const DOUBLE_CLICK_GAP_MS: u64 = 72;
 const TRAY_ICON_ID: &str = "main";
 const TRAY_MENU_SETTINGS_ID: &str = "tray-settings";
@@ -1425,6 +1435,8 @@ pub fn run() {
             overlay_key_map: Mutex::new(HashMap::new()),
             overlay_active: Mutex::new(false),
             overlay_generation: AtomicU64::new(0),
+            #[cfg(target_os = "macos")]
+            secure_input_hint_id: AtomicU64::new(0),
             overlay_lifecycle: Mutex::new(()),
             overlay_click_action: Mutex::new(None),
             drag_session: Mutex::new(None),
@@ -2075,12 +2087,38 @@ fn switch_monitor(app: &AppHandle) {
     emit_overlay_activate(app, state.inner(), region, config, action);
 }
 
+#[cfg(target_os = "macos")]
+fn show_secure_input_hint(app: &AppHandle, state: &AppState, region: &Region, locale: &str) {
+    let hint_id = state.secure_input_hint_id.fetch_add(1, Ordering::SeqCst) + 1;
+    let generation = state.overlay_generation.load(Ordering::SeqCst);
+    let _ = app.emit_to(
+        EventTarget::webview_window("overlay"),
+        "overlay:secure-input",
+        locale,
+    );
+    show_overlay_window(app, region);
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(SECURE_INPUT_HINT_DURATION);
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let state = handle.state::<AppState>();
+            // A new hint or grid session takes ownership of the window.
+            if state.secure_input_hint_id.load(Ordering::SeqCst) != hint_id
+                || state.overlay_generation.load(Ordering::SeqCst) != generation
+            {
+                return;
+            }
+            if let Some(window) = handle.get_webview_window("overlay") {
+                let _ = window.hide();
+            }
+        });
+    });
+}
+
 fn trigger_overlay(app: &AppHandle) {
     let state = app.state::<AppState>();
-    if let Err(err) = ensure_mouse_control_ready(app, state.inner()) {
-        println!("[overlay] activation blocked: {}", err);
-        return;
-    }
     let config = state
         .config
         .lock()
@@ -2093,6 +2131,17 @@ fn trigger_overlay(app: &AppHandle) {
     } else {
         monitor_region(&monitors[index])
     };
+
+    #[cfg(target_os = "macos")]
+    if unsafe { IsSecureEventInputEnabled() != 0 } {
+        show_secure_input_hint(app, state.inner(), &region, &config.app.locale);
+        return;
+    }
+
+    if let Err(err) = ensure_mouse_control_ready(app, state.inner()) {
+        println!("[overlay] activation blocked: {}", err);
+        return;
+    }
     clear_drag_session(state.inner());
     let action = resolved_overlay_click_action(&config, None);
 

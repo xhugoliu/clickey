@@ -125,6 +125,9 @@
   "overlay.action.drag": "拖动",
   "overlay.drag.phaseStart": "拖动 · 起点",
   "overlay.drag.phaseEnd": "拖动 · 终点",
+  "overlay.secureInput.title": "macOS 安全键盘输入已开启",
+  "overlay.secureInput.retry":
+    "将焦点移到普通文本框或浏览器地址栏，再按 Clickey 激活热键。",
   "errors.layersRequired": "至少需要一层。",
   "errors.comboAxisConstraintSimple":
     "第 {index} 层组合必须是阶段 1 = 1xN，阶段 2 = Nx1。",

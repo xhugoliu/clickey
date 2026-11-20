@@ -3,7 +3,12 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { resolveLocalePreference, setLocale, t } from "$lib/i18n";
+  import {
+    resolveLocalePreference,
+    setLocale,
+    t,
+    type LocalePreference,
+  } from "$lib/i18n";
   import type {
     OverlayActivatePayload,
     OverlayActionPayload,
@@ -30,6 +35,7 @@
   let clickAction = $state<ClickAction | null>(null);
   let dragStartPoint = $state<Point | null>(null);
   let actionHintVisible = $state(false);
+  let secureInputHintVisible = $state(false);
   let canvas: HTMLCanvasElement | null = null;
   const currentWindow = getCurrentWindow();
   let actionHintTimer: ReturnType<typeof setTimeout> | null = null;
@@ -404,11 +410,13 @@
     let unlistenActivate: (() => void) | undefined;
     let unlistenAction: (() => void) | undefined;
     let unlistenKey: (() => void) | undefined;
+    let unlistenSecureInput: (() => void) | undefined;
 
     void (async () => {
       unlistenActivate = await listen<OverlayActivatePayload>(
         "overlay:activate",
         (event) => {
+          secureInputHintVisible = false;
           setLocale(resolveLocalePreference(event.payload.config.app.locale));
           config = event.payload.config;
           baseRegion = event.payload.region;
@@ -438,6 +446,17 @@
       unlistenKey = await listen<NativeKeyPayload>("native:key", (event) => {
         void handleKey(event.payload.key);
       });
+
+      unlistenSecureInput = await listen<LocalePreference>(
+        "overlay:secure-input",
+        (event) => {
+          setLocale(resolveLocalePreference(event.payload));
+          clearActionHintTimer();
+          runtime = null;
+          secureInputHintVisible = true;
+          draw();
+        },
+      );
     })();
 
     const handleResize = () => draw();
@@ -448,13 +467,19 @@
       unlistenActivate?.();
       unlistenAction?.();
       unlistenKey?.();
+      unlistenSecureInput?.();
       window.removeEventListener("resize", handleResize);
     };
   });
 </script>
 
 <main>
-  {#if runtime && actionHintVisible}
+  {#if secureInputHintVisible}
+    <div class="secure-input-hint" role="status">
+      <strong>{$t("overlay.secureInput.title")}</strong>
+      <span>{$t("overlay.secureInput.retry")}</span>
+    </div>
+  {:else if runtime && actionHintVisible}
     <div class="action-hint" style={actionHintStyle(config)}>
       {actionLabel(clickAction)}
     </div>
@@ -492,6 +517,27 @@
     letter-spacing: 0.02em;
     white-space: nowrap;
     backdrop-filter: blur(6px);
+  }
+
+  .secure-input-hint {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    display: grid;
+    gap: 6px;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 14px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(22, 22, 24, 0.94);
+    color: #fff;
+    font-size: 15px;
+    line-height: 1.45;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
   }
 
   canvas {
